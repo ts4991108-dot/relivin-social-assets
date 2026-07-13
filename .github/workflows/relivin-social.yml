@@ -1,26 +1,26 @@
 name: Relivin Weekly Social
-
+ 
 on:
   schedule:
     - cron: "7 15 * * 0"
   workflow_dispatch:
-
+ 
 permissions:
   contents: write
-
+ 
 jobs:
   publish:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
+ 
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-
+ 
       - name: Install Python deps
         run: pip install pillow requests
-
+ 
       - name: Fetch brand fonts
         run: |
           mkdir -p fonts
@@ -30,14 +30,14 @@ jobs:
           curl -sfL "$base/ofl/poppins/Poppins-Regular.ttf"    -o fonts/Poppins-Regular.ttf
           curl -sfL "$base/ofl/lora/Lora%5Bwght%5D.ttf"        -o fonts/Lora-Variable.ttf || true
           curl -sfL "$base/ofl/lora/Lora-Italic%5Bwght%5D.ttf" -o fonts/Lora-Italic-Variable.ttf || true
-
+ 
       - name: Generate and queue this week's cards
         env:
           UPLOAD_POST_API_KEY: ${{ secrets.UPLOAD_POST_API_KEY }}
           RELIVIN_PROFILE: Relivin
           RELIVIN_PLATFORMS: instagram,facebook
-        run: python scripts/relivin_publish.py --post --prune-days 30
-
+        run: python relivin_publish.py --post --prune-days 30
+ 
       - name: Commit archive and prune
         run: |
           git config user.name "relivin-bot"
