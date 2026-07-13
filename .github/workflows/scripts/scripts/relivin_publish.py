@@ -81,9 +81,8 @@ def heart(d,cx,cy,s,color):
     d.ellipse([cx-r*1.5,cy-r,cx-r,cy+r*0.2],fill=color); d.ellipse([cx,cy-r,cx+r*1.5,cy+r*0.2],fill=color)
     d.polygon([(cx-r*1.42,cy-r*0.1),(cx+r*1.42,cy-r*0.1),(cx,cy+r*1.7)],fill=color)
 def wordmark(img,color,y=980):
-    d=ImageDraw.Draw(img); f=F(SANS_BOLD,40); hw=34
-    total=hw+14+d.textlength("Relivin",font=f); x0=(S-total)/2
-    heart(d,x0+hw/2,y+22,hw,color); d.text((x0+hw+14,y),"Relivin",font=f,fill=color)
+    d=ImageDraw.Draw(img); f=F(SANS_BOLD,40)
+    d.text(((S-d.textlength("Relivin",font=f))/2,y),"Relivin",font=f,fill=color)
     fs=F(SANS_REG,22); d.text(((S-d.textlength("relivin.app",font=fs))/2,y+52),"relivin.app",font=fs,fill=color)
 def st_warm(h,tag):
     img=gradient(CORAL,PLUM,140); img=blob(img,200,180,320,(255,210,170),70); img=blob(img,950,950,380,(70,50,90),60)
@@ -105,36 +104,16 @@ STYLES={"warm":st_warm,"editorial":st_editorial,"bold":st_bold}
 CTA="Join the waitlist → relivin.app"; TAGS="#Relivin #FamilyMemories #Parenthood #Keepsake"
  
 BANK=[
- ("warm","A moment worth keeping","Someday they'll ask what they were like at three.",
-  "Someday they'll ask what they were like at three. Relivin keeps the answer — every photo, video, and little note, filed by age from day one."),
- ("editorial","How Relivin works","Every memory, filed by age — not just by date.",
-  "Your camera roll knows the date. Relivin knows the story — every moment on one timeline, by year and by age, so “first steps” sits exactly where it belongs."),
- ("bold","Private by design","No likes. No feed. No algorithm. Just family.",
-  "Capture your life, not your image. Relivin is a private timeline for the people you love — no likes, no public feed, no algorithm. Just the family you invite."),
- ("warm","Better together","The best memories were never yours alone.",
-  "The best memories were never yours alone. With Relivin, everyone who was there adds their photos and notes to the same timeline — so the whole story lives in one place."),
- ("bold","Waitlist open","Early access is almost here.",
-  "We’re opening the doors to Relivin soon — a private, lasting home for your family’s memories, organized by age from day one. Be first in line."),
- ("editorial","The little things","The way they said it wrong — you’ll want that back.",
-  "It’s the tiny things that fade first. Relivin gives every photo, clip, and note a place to live, filed by age, so the little moments stay exactly where you left them."),
- ("warm","Your story, kept","One home for every photo, video, and note that matters.",
-  "One home for every photo, video, and note that matters — organized by age, shared only with the people who were there. That’s Relivin."),
- ("bold","No algorithm","Your memories shouldn’t have to go viral to be seen.",
-  "Your memories shouldn’t have to go viral to be seen. Relivin is a quiet, private timeline for your family — no metrics, no feed, no strangers."),
- ("editorial","Built for keeps","A home for the moments you never want to lose.",
-  "Phones break. Feeds disappear. Relivin is built for keeps — a lasting, private home for the moments you never want to lose."),
- ("warm","Join us early","Be first in line for your family’s private home.",
-  "Be first in line. Relivin is a private timeline for your family’s memories, filed by age from day one — and early access is opening soon."),
- ("bold","For the people you love","Made for the ten people who matter — not ten thousand strangers.",
-  "Made for the ten people who matter — not ten thousand strangers. Relivin is where your family’s memories live, privately, together."),
- ("warm","Every age, remembered","From first breath to first day of school — one timeline.",
-  "From first breath to first day of school, Relivin keeps every moment on one timeline, by age, built together with the people who were there."),
- ("editorial","Quietly yours","Social, without the audience.",
-  "Social, without the audience. Relivin lets your family share photos, videos, and notes on a private timeline — no likes, no feed, just you."),
- ("bold","Coming soon","The waitlist is open. The memories are waiting.",
-  "The waitlist is open and the memories are waiting. Relivin is a private, lasting home for your family’s story, organized by age from day one."),
- ("warm","Together from day one","Everyone who was there helps tell the story.",
-  "Everyone who was there helps tell the story. Relivin gathers your family’s photos, videos, and notes onto one private timeline, from day one."),
+ ("warm","Timeline by age","Every moment, auto-sorted by age.",
+  "Relivin files every photo and video onto one timeline, automatically organized by age. Jump straight to “age 2” or “first steps” — no folders, no endless scrolling."),
+ ("bold","Private by design","You choose exactly who sees it.",
+  "Relivin is invite-only by design. Add the grandparents, the godparents, the people who were actually there — and no one else. No public profile, no followers, no strangers."),
+ ("editorial","One shared timeline","Everyone’s photos, in one place.",
+  "The best photo of the day is usually on someone else’s phone. Relivin lets everyone who was there add to the same private timeline, so the whole story lives in one place."),
+ ("warm","Notes & context","Save the story, not just the photo.",
+  "Add a note to any memory — what they said, where you were, why it mattered. Relivin keeps the context that camera rolls and captions lose."),
+ ("bold","Backed up for life","Every memory, safe for a lifetime.",
+  "Phones break and feeds vanish. Relivin keeps every photo, video, and note in one secure, private home — backed up and built to last a lifetime."),
 ]
  
 def generate(out):
@@ -198,11 +177,20 @@ def main():
     with open(os.path.join(out,"captions.json"),"w") as f: json.dump(
         [{"file":i["file"],"style":i["style"],"caption":i["caption"]} for i in items], f, indent=2, ensure_ascii=False)
  
+    cur=os.path.join(a.root,"current"); os.makedirs(cur,exist_ok=True)
+    for k,it in enumerate(items,1):
+        shutil.copy(it["path"], os.path.join(cur,f"relivin_{k}.png"))
+    json.dump([{"file":f"relivin_{k}.png","style":it["style"],"caption":it["caption"]} for k,it in enumerate(items,1)],
+              open(os.path.join(cur,"cards.json"),"w"), indent=2, ensure_ascii=False)
+ 
     if a.post or a.dry_run:
         print(f"Posting {len(items)} cards to queue (profile={profile}, platforms={platforms})…")
         for it in items: post_to_queue(it, profile, platforms, dry=a.dry_run)
  
     prune(a.root, a.prune_days)
+    print("done:", today)
+ 
+if __name__=="__main__": main()
     print("done:", today)
  
 if __name__=="__main__": main()
