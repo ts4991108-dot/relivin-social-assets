@@ -3,11 +3,12 @@
 make_short(style, tag, head, out_path) renders a ~5s branded Short via ffmpeg.
 Styles: warm (gradient) / editorial (cream) / bold (plum). Fast: numpy bg + piped frames.
 """
-import os, sys, math, subprocess
+import os, sys, math, subprocess, wave
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont, ImageFilter
 
 W,H=1080,1920; FPS=30; DUR=5.0; N=int(FPS*DUR)
+SR=44100  # audio sample rate
 CORAL=(217,105,74); CORAL_DK=(178,74,46); PLUM=(91,75,110); CREAM=(246,241,234); INK=(43,37,33)
 
 # ---- portable font resolution: local fonts/ dir first, then system, then DejaVu ----
@@ -74,6 +75,36 @@ def _wrap(d,t,f,mw):
 def _ctext(d,y,text,font,rgb,alpha):
     w=d.textlength(text,font=font); d.text(((W-w)/2,y),text,font=font,fill=rgb+(int(alpha*255),))
 
+# ---- original synthesized audio bed (100% generated -> no copyright / Content ID risk) ----
+# Warm sine-based pad + soft bell shimmer. Chord differs per style so each Short varies.
+_CHORDS={
+ "warm":     [220.00,277.18,329.63,440.00],  # A major, warm
+ "bold":     [196.00,246.94,293.66,392.00],  # G major, lower/fuller
+ "editorial":[261.63,329.63,392.00,523.25],  # C major, brighter
+}
+def make_bed(style, path, dur=DUR):
+    n=int(SR*dur); t=np.arange(n)/SR
+    freqs=_CHORDS.get(style,_CHORDS["warm"])
+    pad=np.zeros(n)
+    for f in freqs:
+        pad+=np.sin(2*np.pi*f*t)                 # fundamental
+        pad+=0.35*np.sin(2*np.pi*f*1.004*t)      # detuned layer -> warmth
+        pad+=0.22*np.sin(2*np.pi*f*0.5*t)        # sub octave -> body
+    pad/=len(freqs)
+    pad*=1.0+0.08*np.sin(2*np.pi*0.25*t)         # slow tremolo -> gentle movement
+    bell=np.zeros(n)                              # soft bell arpeggio (octave up)
+    for i,f in enumerate(freqs):
+        start=0.6+i*(dur-1.0)/len(freqs)
+        idx=t>=start; env=np.zeros(n); env[idx]=np.exp(-3.0*(t[idx]-start))
+        bell+=0.22*env*np.sin(2*np.pi*f*2*t)
+    mix=0.75*pad+0.35*bell
+    mix*=np.clip(t/0.7,0,1)*np.clip((dur-t)/1.2,0,1)  # fade in / out
+    mix/=(np.max(np.abs(mix))+1e-6); mix*=0.45         # normalize with headroom
+    pcm=(mix*32767).astype(np.int16); stereo=np.column_stack([pcm,pcm]).ravel()
+    with wave.open(path,"w") as w:
+        w.setnchannels(2); w.setsampwidth(2); w.setframerate(SR); w.writeframes(stereo.tobytes())
+    return path
+
 def make_short(style, tag, head, out_path):
     if style=="warm": hf=F(LORA,90); htxt=(255,252,248); ktxt=(255,236,224); wtxt=(255,250,246)
     elif style=="bold": hf=F(P_BOLD,84); htxt=(255,252,248); ktxt=(255,252,248); wtxt=(255,250,246)
@@ -82,8 +113,11 @@ def make_short(style, tag, head, out_path):
     BG,BW,BH=_bg(style)
     tmp=ImageDraw.Draw(Image.new("RGB",(10,10))); HL=_wrap(tmp,head,hf,880)
     ah,dh=hf.getmetrics(); lh=int((ah+dh)*(1.08 if style=="bold" else 1.14)); head_h=lh*len(HL); head_top=(H-head_h)//2-30
+    bed=make_bed(style, out_path+".wav")
     proc=subprocess.Popen(["ffmpeg","-y","-f","rawvideo","-pix_fmt","rgb24","-s",f"{W}x{H}","-r",str(FPS),"-i","-",
-        "-c:v","libx264","-pix_fmt","yuv420p","-profile:v","high","-crf","21","-movflags","+faststart",out_path],
+        "-i",bed,
+        "-c:v","libx264","-pix_fmt","yuv420p","-profile:v","high","-crf","21",
+        "-c:a","aac","-b:a","160k","-shortest","-movflags","+faststart",out_path],
         stdin=subprocess.PIPE,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
     for i in range(N):
         t=i/FPS; p=i/(N-1)
@@ -104,6 +138,8 @@ def make_short(style, tag, head, out_path):
         if wa>0: _ctext(d,yw,"Relivin",fwb,wtxt,wa); _ctext(d,yw+66,"relivin.app",fwr,wtxt,wa)
         proc.stdin.write(Image.alpha_composite(fr,lay).convert("RGB").tobytes())
     proc.stdin.close(); proc.wait()
+    try: os.remove(bed)
+    except OSError: pass
     return out_path
 
 FEATURES=[
