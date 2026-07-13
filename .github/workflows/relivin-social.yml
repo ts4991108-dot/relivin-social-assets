@@ -1,47 +1,66 @@
 name: Relivin Weekly Social
- 
+
 on:
   schedule:
     - cron: "7 15 * * 0"
   workflow_dispatch:
- 
+
 permissions:
   contents: write
- 
+
 jobs:
   publish:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
- 
+
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
- 
+
+      - name: Show repo layout
+        run: |
+          echo "Files in repo:"
+          find . -type f -not -path './.git/*'
+
       - name: Install Python deps
         run: pip install pillow requests
- 
+
       - name: Fetch brand fonts
         run: |
           mkdir -p fonts
           base="https://raw.githubusercontent.com/google/fonts/main"
-          curl -sfL "$base/ofl/poppins/Poppins-Bold.ttf"       -o fonts/Poppins-Bold.ttf
-          curl -sfL "$base/ofl/poppins/Poppins-Medium.ttf"     -o fonts/Poppins-Medium.ttf
-          curl -sfL "$base/ofl/poppins/Poppins-Regular.ttf"    -o fonts/Poppins-Regular.ttf
+          curl -sfL "$base/ofl/poppins/Poppins-Bold.ttf"       -o fonts/Poppins-Bold.ttf || true
+          curl -sfL "$base/ofl/poppins/Poppins-Medium.ttf"     -o fonts/Poppins-Medium.ttf || true
+          curl -sfL "$base/ofl/poppins/Poppins-Regular.ttf"    -o fonts/Poppins-Regular.ttf || true
           curl -sfL "$base/ofl/lora/Lora%5Bwght%5D.ttf"        -o fonts/Lora-Variable.ttf || true
           curl -sfL "$base/ofl/lora/Lora-Italic%5Bwght%5D.ttf" -o fonts/Lora-Italic-Variable.ttf || true
- 
+          echo "Fonts downloaded (missing ones fall back to DejaVu):"
+          ls -la fonts || true
+
       - name: Generate and queue this week's cards
         env:
           UPLOAD_POST_API_KEY: ${{ secrets.UPLOAD_POST_API_KEY }}
           RELIVIN_PROFILE: Relivin
           RELIVIN_PLATFORMS: instagram,facebook
-        run: python relivin_publish.py --post --prune-days 30
- 
+        run: |
+          SCRIPT="$(find . -name 'relivin_publish.py' -not -path './.git/*' | head -1)"
+          echo "Located script at: '$SCRIPT'"
+          if [ -z "$SCRIPT" ]; then
+            echo "ERROR: relivin_publish.py was not found anywhere in the repo."
+            echo "Make sure the file is committed. Current files:"
+            find . -type f -not -path './.git/*'
+            exit 1
+          fi
+          if [ -z "$UPLOAD_POST_API_KEY" ]; then
+            echo "WARNING: UPLOAD_POST_API_KEY secret is empty - cards will generate but not post."
+          fi
+          python "$SCRIPT" --post --prune-days 30
+
       - name: Commit archive and prune
         run: |
           git config user.name "relivin-bot"
           git config user.email "actions@users.noreply.github.com"
-          git add social
+          git add social 2>/dev/null || true
           git commit -m "Weekly social cards" || echo "nothing to commit"
-          git push
+          git push || echo "nothing to push"
