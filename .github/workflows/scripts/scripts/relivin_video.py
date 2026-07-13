@@ -6,16 +6,33 @@ Styles: warm (gradient) / editorial (cream) / bold (plum). Fast: numpy bg + pipe
 import os, sys, math, subprocess
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont, ImageFilter
- 
+
 W,H=1080,1920; FPS=30; DUR=5.0; N=int(FPS*DUR)
 CORAL=(217,105,74); CORAL_DK=(178,74,46); PLUM=(91,75,110); CREAM=(246,241,234); INK=(43,37,33)
-FD="/usr/share/fonts/truetype"
-LORA=f"{FD}/google-fonts/Lora-Variable.ttf"; LORA_IT=f"{FD}/google-fonts/Lora-Italic-Variable.ttf"
-P_BOLD=f"{FD}/google-fonts/Poppins-Bold.ttf"; P_MED=f"{FD}/google-fonts/Poppins-Medium.ttf"; P_REG=f"{FD}/google-fonts/Poppins-Regular.ttf"
+
+# ---- portable font resolution: local fonts/ dir first, then system, then DejaVu ----
+FONT_DIRS=[os.environ.get("RELIVIN_FONT_DIR","fonts"),
+           "/usr/share/fonts/truetype/google-fonts",
+           "/usr/share/fonts/truetype/dejavu",
+           "/usr/share/fonts/truetype/liberation"]
+def _find(cands, fallback):
+    for d in FONT_DIRS:
+        for n in cands:
+            p=os.path.join(d,n)
+            if os.path.exists(p): return p
+    for d in FONT_DIRS:
+        fb=os.path.join(d,fallback)
+        if os.path.exists(fb): return fb
+    return fallback
+LORA   =_find(["Lora-Variable.ttf","Lora[wght].ttf","Lora-Regular.ttf"],"DejaVuSerif.ttf")
+LORA_IT=_find(["Lora-Italic-Variable.ttf","Lora-Italic[wght].ttf","Lora-Italic.ttf"],"DejaVuSerif-Italic.ttf")
+P_BOLD =_find(["Poppins-Bold.ttf"],"DejaVuSans-Bold.ttf")
+P_MED  =_find(["Poppins-Medium.ttf"],"DejaVuSans-Bold.ttf")
+P_REG  =_find(["Poppins-Regular.ttf"],"DejaVuSans.ttf")
 def F(p,s): return ImageFont.truetype(p,s)
 def smooth(x): x=max(0.0,min(1.0,x)); return x*x*(3-2*x)
 def seg(t,a,b): return smooth((t-a)/(b-a)) if b>a else (1.0 if t>=b else 0.0)
- 
+
 def _grad_np(w,h,c1,c2,angle=125):
     rad=math.radians(angle); dx,dy=math.cos(rad),math.sin(rad)
     xs=np.arange(w); ys=np.arange(h)
@@ -23,12 +40,12 @@ def _grad_np(w,h,c1,c2,angle=125):
     lo,hi=proj.min(),proj.max(); tt=((proj-lo)/(hi-lo))[...,None]
     c1=np.array(c1); c2=np.array(c2)
     return (c1+(c2-c1)*tt).astype(np.uint8)
- 
+
 def _blob(size,cx,cy,rx,ry,color,alpha,blur):
     ov=Image.new("RGBA",size,(0,0,0,0)); d=ImageDraw.Draw(ov)
     d.ellipse([cx-rx,cy-ry,cx+rx,cy+ry],fill=color+(alpha,))
     return ov.filter(ImageFilter.GaussianBlur(blur))
- 
+
 def _bg(style):
     BW,BH=1220,2160
     if style=="warm":
@@ -43,7 +60,7 @@ def _bg(style):
         base=Image.alpha_composite(base,_blob((BW,BH),150,150,360,360,(255,255,255),90,170))
         base=Image.alpha_composite(base,_blob((BW,BH),BW-150,BH-150,360,360,(220,205,188),80,170))
     return base.convert("RGB"),BW,BH
- 
+
 def _wrap(d,t,f,mw):
     out=[];cur=""
     for w in t.split():
@@ -56,7 +73,7 @@ def _wrap(d,t,f,mw):
     return out
 def _ctext(d,y,text,font,rgb,alpha):
     w=d.textlength(text,font=font); d.text(((W-w)/2,y),text,font=font,fill=rgb+(int(alpha*255),))
- 
+
 def make_short(style, tag, head, out_path):
     if style=="warm": hf=F(LORA,90); htxt=(255,252,248); ktxt=(255,236,224); wtxt=(255,250,246)
     elif style=="bold": hf=F(P_BOLD,84); htxt=(255,252,248); ktxt=(255,252,248); wtxt=(255,250,246)
@@ -88,7 +105,7 @@ def make_short(style, tag, head, out_path):
         proc.stdin.write(Image.alpha_composite(fr,lay).convert("RGB").tobytes())
     proc.stdin.close(); proc.wait()
     return out_path
- 
+
 FEATURES=[
  ("warm","Timeline by age","Every moment, auto-sorted by age."),
  ("bold","Private by design","You choose exactly who sees it."),
