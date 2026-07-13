@@ -55,7 +55,7 @@ jobs:
           if [ -z "$UPLOAD_POST_API_KEY" ]; then
             echo "WARNING: UPLOAD_POST_API_KEY secret is empty - cards will generate but not post."
           fi
-          python "$SCRIPT" --post --prune-days 30
+          python "$SCRIPT" --prune-days 30
 
       - name: Commit archive and prune
         run: |
