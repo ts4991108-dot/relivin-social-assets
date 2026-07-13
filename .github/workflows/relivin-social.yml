@@ -24,7 +24,7 @@ jobs:
           find . -type f -not -path './.git/*'
  
       - name: Install Python deps
-        run: pip install pillow requests
+        run: pip install pillow requests numpy
  
       - name: Fetch brand fonts
         run: |
@@ -56,6 +56,19 @@ jobs:
             echo "WARNING: UPLOAD_POST_API_KEY secret is empty - cards will generate but not post."
           fi
           python "$SCRIPT" --prune-days 30
+ 
+      - name: Generate weekly Shorts (video)
+        run: |
+          ffmpeg -version >/dev/null 2>&1 || (sudo apt-get update && sudo apt-get install -y ffmpeg)
+          VS="$(find . -name 'relivin_video.py' -not -path './.git/*' | head -1)"
+          if [ -z "$VS" ]; then
+            echo "relivin_video.py not found — skipping video generation."
+          else
+            echo "Rendering Shorts with $VS"
+            mkdir -p social/current
+            python "$VS" social/current
+            echo "Videos:"; ls -la social/current/*.mp4 || true
+          fi
  
       - name: Commit archive and prune
         run: |
