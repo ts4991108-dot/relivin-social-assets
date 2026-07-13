@@ -1,28 +1,28 @@
 #!/usr/bin/env python3
 """Relivin weekly social pipeline — runs inside GitHub Actions.
- 
+
   1. Generates this ISO week's 5 on-brand cards (rotating styles + content bank).
   2. Posts each to the Upload-Post queue via the REST API (direct file upload —
      no public image host required).
   3. Auto-prunes archived card folders older than --prune-days.
- 
+
 Env:
   UPLOAD_POST_API_KEY  (required for --post)  your Upload-Post API key
   RELIVIN_PROFILE      default "Relivin"       Upload-Post profile name
   RELIVIN_PLATFORMS    default "instagram,facebook"
   RELIVIN_FONT_DIR     default "fonts"         where brand fonts live
- 
+
 Usage:
   python relivin_publish.py --post --prune-days 30
   python relivin_publish.py --dry-run          # generate + show payloads, no posting
 """
 import sys, os, math, json, datetime, argparse, shutil
- 
+
 from PIL import Image, ImageDraw, ImageFont, ImageFilter
- 
+
 INK=(43,37,33); CREAM=(246,241,234); CORAL=(217,105,74); CORAL_DK=(178,74,46); PLUM=(91,75,110)
 S=1080
- 
+
 # ---- portable font resolution: local fonts/ dir first, then system, then DejaVu ----
 FONT_DIRS=[os.environ.get("RELIVIN_FONT_DIR","fonts"),
            "/usr/share/fonts/truetype/google-fonts",
@@ -43,7 +43,7 @@ SANS_BOLD=_find(["Poppins-Bold.ttf"],"DejaVuSans-Bold.ttf")
 SANS_MED =_find(["Poppins-Medium.ttf"],"DejaVuSans-Bold.ttf")
 SANS_REG =_find(["Poppins-Regular.ttf"],"DejaVuSans.ttf")
 def F(p,s): return ImageFont.truetype(p,s)
- 
+
 def gradient(c1,c2,angle=140):
     base=Image.new("RGB",(S,S),c1); top=Image.new("RGB",(S,S),c2); mask=Image.new("L",(S,S)); md=mask.load()
     rad=math.radians(angle); dx,dy=math.cos(rad),math.sin(rad)
@@ -102,7 +102,7 @@ def st_bold(h,tag):
     fh=F(SANS_BOLD,84); h2=bh(h,fh,860,1.08); block(img,h,fh,(255,252,248),860,S/2,(S-h2)/2-10,1.08); wordmark(img,(255,250,246)); return img
 STYLES={"warm":st_warm,"editorial":st_editorial,"bold":st_bold}
 CTA="Join the waitlist → relivin.app"; TAGS="#Relivin #FamilyMemories #Parenthood #Keepsake"
- 
+
 BANK=[
  ("warm","Timeline by age","Every moment, auto-sorted by age.",
   "Relivin files every photo and video onto one timeline, automatically organized by age. Jump straight to “age 2” or “first steps” — no folders, no endless scrolling."),
@@ -115,7 +115,7 @@ BANK=[
  ("bold","Backed up for life","Every memory, safe for a lifetime.",
   "Phones break and feeds vanish. Relivin keeps every photo, video, and note in one secure, private home — backed up and built to last a lifetime."),
 ]
- 
+
 def generate(out):
     os.makedirs(out,exist_ok=True)
     wk=datetime.date.today().isocalendar()[1]
@@ -128,7 +128,7 @@ def generate(out):
         items.append({"file":fn,"path":p,"style":style,"caption":f"{body}\n\n{CTA}\n\n{TAGS}"})
         print("generated",fn)
     return items
- 
+
 def post_to_queue(item, profile, platforms, dry=False):
     import requests
     key=os.environ.get("UPLOAD_POST_API_KEY","")
@@ -147,7 +147,7 @@ def post_to_queue(item, profile, platforms, dry=False):
     ok = r.status_code<300
     print(f"  {'queued' if ok else 'FAILED'} {item['file']} -> HTTP {r.status_code} {r.text[:160]}")
     return {"status":r.status_code,"ok":ok}
- 
+
 def prune(root, days):
     if not os.path.isdir(root): return
     cutoff=datetime.date.today()-datetime.timedelta(days=days)
@@ -158,7 +158,7 @@ def prune(root, days):
         except ValueError: continue
         if d<cutoff:
             shutil.rmtree(p); print("pruned",p)
- 
+
 def main():
     ap=argparse.ArgumentParser()
     ap.add_argument("--post",action="store_true")
@@ -166,31 +166,28 @@ def main():
     ap.add_argument("--prune-days",type=int,default=30)
     ap.add_argument("--root",default="social")
     a=ap.parse_args()
- 
+
     profile=os.environ.get("RELIVIN_PROFILE","Relivin")
     platforms=[x.strip() for x in os.environ.get("RELIVIN_PLATFORMS","instagram,facebook").split(",") if x.strip()]
- 
+
     today=datetime.date.today().isoformat()
     out=os.path.join(a.root,today)
     items=generate(out)
     # captions archive
     with open(os.path.join(out,"captions.json"),"w") as f: json.dump(
         [{"file":i["file"],"style":i["style"],"caption":i["caption"]} for i in items], f, indent=2, ensure_ascii=False)
- 
+
     cur=os.path.join(a.root,"current"); os.makedirs(cur,exist_ok=True)
     for k,it in enumerate(items,1):
         shutil.copy(it["path"], os.path.join(cur,f"relivin_{k}.png"))
     json.dump([{"file":f"relivin_{k}.png","style":it["style"],"caption":it["caption"]} for k,it in enumerate(items,1)],
               open(os.path.join(cur,"cards.json"),"w"), indent=2, ensure_ascii=False)
- 
+
     if a.post or a.dry_run:
         print(f"Posting {len(items)} cards to queue (profile={profile}, platforms={platforms})…")
         for it in items: post_to_queue(it, profile, platforms, dry=a.dry_run)
- 
+
     prune(a.root, a.prune_days)
     print("done:", today)
- 
-if __name__=="__main__": main()
-    print("done:", today)
- 
+
 if __name__=="__main__": main()
